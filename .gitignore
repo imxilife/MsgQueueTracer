@@ -1,0 +1,26 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Ignore misc.xml and gradle.xml specifically
+.idea/misc.xml
+.idea/gradle.xml
+.idea/migrations.xml
+.idea/deploymentTargetSelector.xml
+
+# Except for the following files
+!.idea/codeStyles
+!.idea/codeStyles/*
+!.idea/vcs.xml
