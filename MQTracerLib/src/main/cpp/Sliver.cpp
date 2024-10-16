@@ -18,9 +18,11 @@
 #include "mutex"
 #include "atomic"
 #include "time.h"
+#include <fstream>
+#include <string>
 
 
-#define SLIVER_JNI_CLASS_NAME  "me/kelly/xstackhook/stack/Sliver"
+#define SLIVER_JNI_CLASS_NAME  "me/kelly/mqtracerlib/stack/Sliver"
 
 #define TAG "TAGG"
 
@@ -55,17 +57,21 @@ nativeGetMethodStack(JNIEnv *env, jobject cls, jobject thread_peer, jlong native
 
 static jobjectArray prettyMethods(JNIEnv *env, jobject cls, jlongArray methods);
 
-static void printJObjectArray(JNIEnv* env,jobjectArray array);
+static void printJObjectArray(JNIEnv *env, jobjectArray array);
 
-static jlong getTime(JNIEnv* env, jobject cls);
+static jlong getTime(JNIEnv *env, jobject cls);
 
 static void testPowerState();
 
-static void end(JNIEnv *env,jobject cls);
+static void end(JNIEnv *env, jobject cls);
 
-void stop();
+static void stop(JNIEnv *env, jobject cls);
 
-JavaVM* gJvm = nullptr;
+static int writeFile(std::string path, std::string content);
+
+static std::string jString2string(JNIEnv *env, jstring msg);
+
+JavaVM *gJvm = nullptr;
 
 typedef struct {
     jobject cls;
@@ -74,14 +80,17 @@ typedef struct {
     jint sample_interval;
 } threadArgs;
 
-static void start(JNIEnv *env, jobject cls, jobject thread, jlong thread_peer,jint sample_interval) {
+std::vector<std::string> methodStackVector;
+
+static void
+start(JNIEnv *env, jobject cls, jobject thread, jlong thread_peer, jint sample_interval) {
     if (isRunning) {
         LOGI(TAG, "is running return...");
         return;
     }
     LOGD(TAG, "start stack monitor...");
     isRunning = true;
-    threadArgs* args = new threadArgs {cls, thread, thread_peer,sample_interval};
+    threadArgs *args = new threadArgs{cls, thread, thread_peer, sample_interval};
     pthread_t pthread;
     int result = pthread_create(&pthread, nullptr, monitor, (void *) args);
     if (result) {
@@ -90,11 +99,11 @@ static void start(JNIEnv *env, jobject cls, jobject thread, jlong thread_peer,ji
     pthread_detach(result);
 }
 
-void* monitor(void *args) {
+void *monitor(void *args) {
 
-    JNIEnv * env;
-    threadArgs *paramPtr = static_cast<threadArgs *>(args);
-    if (paramPtr == nullptr) {
+    JNIEnv *env;
+    auto *paramPtr = static_cast<threadArgs *>(args);
+    if (paramPtr) {
         LOGE(TAG, "paramPtr is NULL...");
         return nullptr;
     }
@@ -102,7 +111,7 @@ void* monitor(void *args) {
     if (gJvm != nullptr) {
         if (gJvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
             if (gJvm->AttachCurrentThread(&env, nullptr) != JNI_OK) {
-                LOGE(TAG,"sample thread attach failed...");
+                LOGE(TAG, "sample thread attach failed...");
                 return nullptr;
             }
         }
@@ -116,12 +125,27 @@ void* monitor(void *args) {
         std::unique_lock<std::mutex> lock(targetTimeMutex);
         if (now > targetTime && lastTime != targetTime) {
             //抓栈
-            LOGE(TAG, "start dump stack... 实际时间:%lld | 预期完成时间:%lld | 差值:%lld |上一次时间值:%lld", now, targetTime,
-                 (now - targetTime),lastTime);
-            jlongArray methodArray = nativeGetMethodStack(env, paramPtr->cls, paramPtr->thread,paramPtr->thread_peer);
-            jobjectArray methods = prettyMethods(env,paramPtr->cls,methodArray);
-            printJObjectArray(env,methods);
+            LOGE(TAG,
+                 "start dump stack... 实际时间:%lld | 预期完成时间:%lld | 差值:%lld |上一次时间值:%lld",
+                 now, targetTime,
+                 (now - targetTime), lastTime);
             lastTime = targetTime;
+            jlongArray methodArray = nativeGetMethodStack(env, paramPtr->cls, paramPtr->thread,
+                                                          paramPtr->thread_peer);
+            jobjectArray methods = prettyMethods(env, paramPtr->cls, methodArray);
+            //printJObjectArray(env, methods);
+            int size = env->GetArrayLength(methodArray);
+            //std::string contactStr = std::to_string(targetTime) + "\n";
+            std::string contactStr = "targetTime:";
+            contactStr.append(std::to_string(targetTime)).append("\n");
+            for (int i = 0; i < size; ++i) {
+                auto content = (jstring) env->GetObjectArrayElement(methods, i);
+                std::string str = jString2string(env, content);
+                contactStr.append(str).append("\n");
+            }
+            contactStr.append("\n");
+            //LOGD(TAG,"contentStr:%s",contactStr.c_str());
+            methodStackVector.push_back(contactStr);
         }
         lock.unlock();
         auto end = getTime(nullptr, nullptr);
@@ -132,13 +156,14 @@ void* monitor(void *args) {
     }
     if (gJvm != nullptr) {
         gJvm->DetachCurrentThread();
+        LOGD(TAG, "detach JVM Thread");
     }
     return nullptr;
 }
 
-static void testPowerState(){
+static void testPowerState() {
     // 执行 dumpsys power 命令并读取完整输出
-    FILE* fp = popen("dumpsys power", "r");
+    FILE *fp = popen("dumpsys power", "r");
     if (fp != nullptr) {
         char buffer[256];
         std::string powerState;
@@ -165,20 +190,29 @@ static void testPowerState(){
     }
 }
 
-static void printJObjectArray(JNIEnv* env,jobjectArray array){
+static void printJObjectArray(JNIEnv *env, jobjectArray array) {
     jsize arrayLength = env->GetArrayLength(array);
 
     for (jsize i = 0; i < arrayLength; ++i) {
         jstring jstr = (jstring) env->GetObjectArrayElement(array, i);
         if (jstr != nullptr) {
-            const char* str = env->GetStringUTFChars(jstr, nullptr);
+            const char *str = env->GetStringUTFChars(jstr, nullptr);
             if (str != nullptr) {
-                LOGD(TAG,"str:%s",str);
+                LOGD(TAG, "str:%s", str);
                 env->ReleaseStringUTFChars(jstr, str);
             }
             env->DeleteLocalRef(jstr);
         }
     }
+}
+
+static std::string jString2string(JNIEnv *env, jstring msg) {
+    const char *str = env->GetStringUTFChars(msg, nullptr);
+    if (str != nullptr) {
+        env->ReleaseStringUTFChars(msg, str);
+    }
+    env->DeleteLocalRef(msg);
+    return str;
 }
 
 static jlongArray
@@ -194,10 +228,10 @@ nativeGetMethodStack(JNIEnv *env, jobject cls, jobject thread_peer, jlong native
         isSameThread = true;
     }
 
-    //step1 挂起要抓栈的线程
     if (!isSameThread) {
-        LOGI(TAG,"suspend thread:%p",thread);
-        ArtHelper::SuspendThreadByThreadId(thread->GetThreadId(), SuspendReason::kForUserCode,&timeOut);
+        LOGI(TAG, "suspend thread:%p", thread);
+        ArtHelper::SuspendThreadByThreadId(thread->GetThreadId(), SuspendReason::kForUserCode,
+                                           &timeOut);
     }
 
     /******test begin*******/
@@ -214,15 +248,13 @@ nativeGetMethodStack(JNIEnv *env, jobject cls, jobject thread_peer, jlong native
         return true;
     };
 
-    //step2 调用walkStack
     auto visitor = new FetchStackVisitor(thread,
                                          &stack_methods,
                                          fn);
     ArtHelper::StackVisitorWalkStack(visitor, false);
 
-    //step3 恢复线程
     if (!isSameThread) {
-        LOGI(TAG,"resume thread:%p",thread);
+        LOGI(TAG, "resume thread:%p", thread);
         ArtHelper::Resume(thread, SuspendReason::kForUserCode);
     }
 
@@ -234,7 +266,7 @@ nativeGetMethodStack(JNIEnv *env, jobject cls, jobject thread_peer, jlong native
     jlongArray methodArray = env->NewLongArray((jsize) stack_methods.size());
     jlong *destElements = env->GetLongArrayElements(methodArray, nullptr);
     size_t count = stack_methods.size();
-    LOGD(TAG,"stack methods count:%d",count);
+    LOGD(TAG, "stack methods count:%d", count);
     for (int i = 0; i < count; i++) {
         destElements[i] = (jlong) stack_methods[i];
     }
@@ -259,7 +291,6 @@ static jobjectArray prettyMethods(JNIEnv *env, jobject cls, jlongArray methods) 
         /* if(pretty_method.empty()){
              LOGE("TAGG","pretty_methods is empty...");
          }*/
-
         pretty_method.c_str();
         jstring frame = env->NewStringUTF(pretty_method.c_str());
         env->SetObjectArrayElement(ret, i, frame);
@@ -270,37 +301,64 @@ static jobjectArray prettyMethods(JNIEnv *env, jobject cls, jlongArray methods) 
 }
 
 
-void stop() {
+static void stop(JNIEnv *env, jobject cls) {
     isRunning = false;
 }
-
 
 static void updateTargetTime(JNIEnv *env, jobject cls, jlong msgTargetTime) {
     std::unique_lock<std::mutex> lock(targetTimeMutex);
     targetTime = msgTargetTime;
     lastTime = 0L;
-    jlong now = getTime(env,cls);
-    LOGI(TAG,"updateTarget MTT:%lld | NOW:%lld | MTT-NOW:%lld",msgTargetTime,now,(msgTargetTime-now));
+    jlong now = getTime(env, cls);
+    //LOGI(TAG,"updateTarget MTT:%lld | NOW:%lld | MTT-NOW:%lld",msgTargetTime,now,(msgTargetTime-now));
 }
 
 /**
  * 返回当前时间 毫秒
  * @return
  */
-static jlong getTime(JNIEnv* env, jobject cls) {
+static jlong getTime(JNIEnv *env, jobject cls) {
     timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    jlong currentTime = static_cast<jlong>(ts.tv_sec) * 1000L + static_cast<jlong>(ts.tv_nsec) / 1000000L;
+    jlong currentTime =
+            static_cast<jlong>(ts.tv_sec) * 1000L + static_cast<jlong>(ts.tv_nsec) / 1000000L;
     return currentTime;
 }
 
 
-static void dump(JNIEnv *env, jobject cls) {
-    LOGD(TAG,"dump");
+static void dump(JNIEnv *env, jobject cls, jstring jPath) {
+    LOGD(TAG, "dump");
+    stop(env, cls);
+    const char *path_cstr = env->GetStringUTFChars(jPath, nullptr);
+    if (path_cstr == nullptr) {
+        LOGE(TAG, "path_cstr is nullptr");
+        return;
+    }
+    std::string myPath(path_cstr);
+    env->ReleaseStringUTFChars(jPath, path_cstr);
 
+    std::string content;
+    if (!methodStackVector.empty()) {
+        for (const auto &item: methodStackVector) {
+            //将所有堆栈写入文件中
+            content.append(item);
+        }
+    }
+    LOGD(TAG, "content:%s", content.c_str());
+    writeFile(myPath, content);
 }
 
-static void end(JNIEnv *env,jobject cls){
+static int writeFile(std::string path, std::string content) {
+    std::ofstream outFile(path);
+    if (!outFile) {
+        return -1;
+    }
+    outFile << content;
+    outFile.close();
+    return 0;
+}
+
+static void end(JNIEnv *env, jobject cls) {
     std::unique_lock<std::mutex> lock(targetTimeMutex);
     lastTime = targetTime;
 }
@@ -308,11 +366,12 @@ static void end(JNIEnv *env,jobject cls){
 
 static JNINativeMethod jniMethods[] = {{"nativeGetMethodStackTrace", "(Ljava/lang/Thread;J)[J", (void *) nativeGetMethodStack},
                                        {"prettyMethods",             "([J)[Ljava/lang/String;", (void *) prettyMethods},
-                                       {"start",                     "(Ljava/lang/Thread;JI)V",                     (void *) start},
-                                       {"dump",                      "()V",                     (void *) dump},
-                                       {"updateTargetTime","(J)V",(void*) updateTargetTime},
-                                       {"nativeGetTime", "()J",(void*) getTime},
-                                       {"end","()V",(void*)end}};
+                                       {"start",                     "(Ljava/lang/Thread;JI)V", (void *) start},
+                                       {"dump",                      "(Ljava/lang/String;)V",   (void *) dump},
+                                       {"updateTargetTime",          "(J)V",                    (void *) updateTargetTime},
+                                       {"nativeGetTime",             "()J",                     (void *) getTime},
+                                       {"end",                       "()V",                     (void *) end},
+                                       {"stop",                      "()V",                     (void *) stop}};
 
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -321,9 +380,9 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 
     JNIEnv *env;
     jclass cls;
-    if (vm == nullptr) return JNI_ERR;
+    if (vm) return JNI_ERR;
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
-    if (nullptr == env) return JNI_ERR;
+    if (env) return JNI_ERR;
     if ((cls = env->FindClass(SLIVER_JNI_CLASS_NAME)) == nullptr) return JNI_ERR;
     env->RegisterNatives(cls, jniMethods, sizeof(jniMethods) / sizeof(jniMethods[0]));
     env->GetJavaVM(&gJvm);

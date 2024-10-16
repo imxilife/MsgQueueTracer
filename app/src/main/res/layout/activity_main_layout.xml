@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    >
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="dump堆栈"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="#ff4553"
+        android:onClick="getMethodsStackTrace"
+        />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="测试获取Pending消息"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="#ff4553"
+        android:layout_marginTop="40dp"
+        android:onClick="dumpNextMessages"
+        />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="模拟在主线程执行耗时操作"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="#ff4553"
+        android:layout_marginTop="40dp"
+        android:onClick="sleepThread"
+        />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="模拟MQ中多个方法执行耗时累积"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="#ff4553"
+        android:layout_marginTop="40dp"
+        android:onClick="postMultiHeavyMethod"
+        />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="模拟读取ANR结果"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="#ff4553"
+        android:layout_marginTop="40dp"
+        android:onClick="showMetricResult"
+        />
+
+    <me.kelly.msgqueuetracer.view.BallView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="10dp"
+        android:background="#1fff0000"
+        />
+
+</androidx.appcompat.widget.LinearLayoutCompat>

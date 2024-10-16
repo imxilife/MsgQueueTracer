@@ -23,11 +23,13 @@ class Sliver {
 
     external fun nativeGetTime():Long
 
-    private external fun dump()
+    external fun dump(path:String)
 
     external fun updateTargetTime(targetTime:Long)
 
     external fun prettyMethods(methodIds: LongArray):Array<String>
+
+    external fun stop()
 
     fun getMethodFrames(thread: Thread): LongArray {
         val threadPeer = getNativePeer(thread)
