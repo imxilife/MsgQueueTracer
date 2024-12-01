@@ -24,3 +24,8 @@ local.properties
 !.idea/codeStyles
 !.idea/codeStyles/*
 !.idea/vcs.xml
+
+#ignore c++ build ouput .so
+MQTracerLib/jnilib/arm64-v8a/libstackHook.so
+MQTracerLib/jnilib/armeabi-v7a/libstackHook.so
+
