@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 3.4.1)
 
-project(XStackHook)
+project(MQTracerLib)
 
 include_directories(src/main/cpp)
 
@@ -22,7 +22,6 @@ add_library(
         ${SRC_DIR_SLIVER}
         src/main/cpp/Sliver.cpp
 )
-
 
 find_library(
         log-lib

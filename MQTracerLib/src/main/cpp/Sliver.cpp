@@ -22,7 +22,7 @@
 #include <string>
 
 
-#define SLIVER_JNI_CLASS_NAME  "me/kelly/mqtracerlib/stack/Sliver"
+#define SLIVER_JNI_CLASS_NAME  "me/kelly/mqtracerlib/stack/Sliver"  //me.kelly.mqtracerlib.stack
 
 #define TAG "TAGG"
 
@@ -103,7 +103,7 @@ void *monitor(void *args) {
 
     JNIEnv *env;
     auto *paramPtr = static_cast<threadArgs *>(args);
-    if (paramPtr) {
+    if (paramPtr == nullptr) {
         LOGE(TAG, "paramPtr is NULL...");
         return nullptr;
     }
@@ -380,15 +380,15 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 
     JNIEnv *env;
     jclass cls;
-    if (vm) return JNI_ERR;
+    if (vm == nullptr) {
+        LOGE(TAG,"vm is null");
+        return JNI_ERR;
+    }
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
-    if (env) return JNI_ERR;
+    if (env == nullptr) return JNI_ERR;
     if ((cls = env->FindClass(SLIVER_JNI_CLASS_NAME)) == nullptr) return JNI_ERR;
     env->RegisterNatives(cls, jniMethods, sizeof(jniMethods) / sizeof(jniMethods[0]));
     env->GetJavaVM(&gJvm);
     ArtHelper::init(env);
     return JNI_VERSION_1_6;
 }
-
-
-
