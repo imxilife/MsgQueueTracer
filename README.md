@@ -4,9 +4,9 @@ MsgQueueTracer is a useful Android library designed to monitor the execution tim
 
 #### step
 
-* git clone project and make build
-* run app
-* export trace file from /data/data/me.kelly.msgqueuetracer/files to local store
+1. git clone project and make build
+2. run app
+3. export trace file from /data/data/me.kelly.msgqueuetracer/files to local store
 ![img1](img.png "download record")
-* open record file from drag to browser expand as below
+4. open record file from drag to browser expand as below
 ![img2](img2.png "show record")
